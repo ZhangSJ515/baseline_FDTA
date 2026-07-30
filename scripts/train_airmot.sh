@@ -7,7 +7,8 @@ OUTPUTS_DIR="${OUTPUTS_DIR:-./outputs/fdta_airmot}"
 CONFIG_PATH="${CONFIG_PATH:-./configs/airmot.yaml}"
 DETR_PRETRAIN="${DETR_PRETRAIN:-./pretrains/r50_deformable_detr_coco_airmot.pth}"
 
-bash scripts/check_airmot_setup.sh
+DATA_ROOT="${DATA_ROOT}" PRETRAIN="${DETR_PRETRAIN}" \
+  bash scripts/check_airmot_setup.sh
 
 accelerate launch --num_processes="${NUM_GPUS}" train.py \
   --config-path "${CONFIG_PATH}" \
