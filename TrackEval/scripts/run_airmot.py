@@ -9,10 +9,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import trackeval  # noqa: E402
 
 
+_LIST_SETTINGS = {
+    "TRACKERS_TO_EVAL",
+    "TRACKER_DISPLAY_NAMES",
+    "CLASSES_TO_EVAL",
+    "METRICS",
+}
+
+
 def _parse_args(config):
     parser = argparse.ArgumentParser()
     for setting, default in config.items():
-        if isinstance(default, list) or default is None:
+        if isinstance(default, list) or setting in _LIST_SETTINGS:
             parser.add_argument("--" + setting, nargs="+")
         else:
             parser.add_argument("--" + setting)
