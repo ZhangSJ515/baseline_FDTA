@@ -1,17 +1,16 @@
 import copy
-import os
+from collections import defaultdict
 from pathlib import Path
 
 import torch
-from collections import defaultdict
-from torch.utils.data import Dataset
 from PIL import Image
+from torch.utils.data import Dataset
 
+from .airmot import AirMot
+from .bft import BFT
+from .crowdhuman import CrowdHuman
 from .dancetrack import DanceTrack
 from .sportsmot import SportsMOT
-from .crowdhuman import CrowdHuman
-from .bft import BFT
-from .airmot import AirMot
 
 
 dataset_classes = {
@@ -41,7 +40,9 @@ def resolve_depth_path(image_path: str) -> str:
     try:
         img1_index = len(parts) - 1 - parts[::-1].index("img1")
     except ValueError as exc:
-        raise ValueError(f"Image path does not contain an 'img1' directory: {image_path}") from exc
+        raise ValueError(
+            f"Image path does not contain an 'img1' directory: {image_path}"
+        ) from exc
 
     parts[img1_index] = "depth"
     depth_base = Path(*parts).with_suffix("")
@@ -57,8 +58,8 @@ def resolve_depth_path(image_path: str) -> str:
 
     candidate_text = ", ".join(str(path) for path in candidates)
     raise FileNotFoundError(
-        f"No depth map found for RGB frame '{image_path}'. Checked: {candidate_text}. "
-        "Generate depth maps before training FDTA."
+        f"No depth map found for RGB frame '{image_path}'. Checked: "
+        f"{candidate_text}. Generate depth maps before training FDTA."
     )
 
 
@@ -78,10 +79,14 @@ class JointDataset(Dataset):
             splits: The list of dataset split names, e.g., ["train", "train"].
         """
         super().__init__()
-        assert len(datasets) == len(splits), "The number of datasets and splits should be the same."
+        assert len(datasets) == len(splits), (
+            "The number of datasets and splits should be the same."
+        )
         self.transforms = transforms
-
         self.size_divisibility = kwargs.get("size_divisibility", 0)
+        self.airmot_filter_gt_by_flag = bool(
+            kwargs.get("airmot_filter_gt_by_flag", False)
+        )
 
         self.sequence_infos = defaultdict(lambda: defaultdict(dict))
         self.image_paths = defaultdict(lambda: defaultdict(dict))
@@ -89,28 +94,41 @@ class JointDataset(Dataset):
         for dataset, split in zip(datasets, splits):
             if dataset not in dataset_classes:
                 raise AttributeError(f"Dataset {dataset} is not supported.")
+
+            dataset_kwargs = {}
+            if dataset in {"AirMot", "AirMOT"}:
+                dataset_kwargs["filter_gt_by_flag"] = (
+                    self.airmot_filter_gt_by_flag
+                )
+
             dataset_class = dataset_classes[dataset](
                 data_root=data_root,
                 split=split,
                 load_annotation=True,
+                **dataset_kwargs,
             )
-            self.sequence_infos[dataset][split] = dataset_class.get_sequence_infos()
+            self.sequence_infos[dataset][split] = (
+                dataset_class.get_sequence_infos()
+            )
             self.image_paths[dataset][split] = dataset_class.get_image_paths()
             self.annotations[dataset][split] = dataset_class.get_annotations()
 
         # Decouple the 'is_legal' attribute from annotations so the sampler can
         # test complete clips without mutating the actual annotations.
         self.ann_is_legals = self._decouple_is_legal()
-
         self.sample_begins: list | None = None
 
     def _decouple_is_legal(self):
-        decoupled_is_legal = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        decoupled_is_legal = defaultdict(
+            lambda: defaultdict(lambda: defaultdict(list))
+        )
         for dataset in self.annotations:
             for split in self.annotations[dataset]:
                 for sequence_name in self.annotations[dataset][split]:
                     for annotation in self.annotations[dataset][split][sequence_name]:
-                        decoupled_is_legal[dataset][split][sequence_name].append(annotation["is_legal"])
+                        decoupled_is_legal[dataset][split][sequence_name].append(
+                            annotation["is_legal"]
+                        )
 
         decoupled_is_legal_in_tensor = defaultdict(
             lambda: defaultdict(lambda: defaultdict(torch.Tensor))
@@ -118,8 +136,11 @@ class JointDataset(Dataset):
         for dataset in decoupled_is_legal:
             for split in decoupled_is_legal[dataset]:
                 for sequence_name in decoupled_is_legal[dataset][split]:
-                    decoupled_is_legal_in_tensor[dataset][split][sequence_name] = torch.tensor(
-                        decoupled_is_legal[dataset][split][sequence_name], dtype=torch.bool
+                    decoupled_is_legal_in_tensor[dataset][split][sequence_name] = (
+                        torch.tensor(
+                            decoupled_is_legal[dataset][split][sequence_name],
+                            dtype=torch.bool,
+                        )
                     )
         return decoupled_is_legal_in_tensor
 
@@ -129,24 +150,36 @@ class JointDataset(Dataset):
             sample_interval: int,
             sample_mode: str = "random_interval",
     ):
-        assert sample_mode in ["random_interval"], f"Sample mode '{sample_mode}' is not supported."
+        assert sample_mode in ["random_interval"], (
+            f"Sample mode '{sample_mode}' is not supported."
+        )
         self.sample_begins = []
         for dataset in self.annotations:
             for split in self.annotations[dataset]:
                 for sequence_name in self.annotations[dataset][split]:
-                    sequence_length = self.sequence_infos[dataset][split][sequence_name]["length"]
+                    sequence_length = self.sequence_infos[dataset][split][
+                        sequence_name
+                    ]["length"]
                     for frame_id in range(sequence_length):
-                        if self.sequence_infos[dataset][split][sequence_name]["is_static"]:
-                            self.sample_begins.append((dataset, split, sequence_name, frame_id))
+                        if self.sequence_infos[dataset][split][sequence_name][
+                            "is_static"
+                        ]:
+                            self.sample_begins.append(
+                                (dataset, split, sequence_name, frame_id)
+                            )
                         elif frame_id + sample_length <= sequence_length:
-                            clip_legality = self.ann_is_legals[dataset][split][sequence_name][
-                                frame_id:frame_id + sample_length
-                            ]
+                            clip_legality = self.ann_is_legals[dataset][split][
+                                sequence_name
+                            ][frame_id:frame_id + sample_length]
                             if clip_legality.all():
-                                self.sample_begins.append((dataset, split, sequence_name, frame_id))
+                                self.sample_begins.append(
+                                    (dataset, split, sequence_name, frame_id)
+                                )
 
     def __len__(self):
-        assert self.sample_begins is not None, "Please use 'self.set_sample_details()' at the start of each epoch."
+        assert self.sample_begins is not None, (
+            "Please use 'self.set_sample_details()' at the start of each epoch."
+        )
         return len(self.sample_begins)
 
     def __getitem__(self, info):
@@ -159,7 +192,9 @@ class JointDataset(Dataset):
             self.image_paths[dataset][split][sequence][frame_idx]
             for frame_idx in frame_idxs
         ]
-        depth_paths = [resolve_depth_path(image_path) for image_path in image_paths]
+        depth_paths = [
+            resolve_depth_path(image_path) for image_path in image_paths
+        ]
 
         images = []
         for image_path in image_paths:
@@ -181,7 +216,9 @@ class JointDataset(Dataset):
                 "split": split,
                 "sequence": sequence,
                 "frame_idx": frame_idx,
-                "is_static": self.sequence_infos[dataset][split][sequence]["is_static"],
+                "is_static": self.sequence_infos[dataset][split][sequence][
+                    "is_static"
+                ],
                 "is_begin": False,
                 "size_divisibility": self.size_divisibility,
             }
@@ -189,7 +226,9 @@ class JointDataset(Dataset):
         ]
         metas[0]["is_begin"] = True
 
-        annotations = [copy.deepcopy(annotation) for annotation in annotations]
+        annotations = [
+            copy.deepcopy(annotation) for annotation in annotations
+        ]
         metas = [copy.deepcopy(meta) for meta in metas]
 
         if self.transforms is not None:
@@ -208,6 +247,7 @@ class JointDataset(Dataset):
                     for info in self.sequence_infos[dataset][split].values()
                 )
                 statistics.append(
-                    f"{dataset}.{split}, {num_sequences} sequences, {num_frames} frames."
+                    f"{dataset}.{split}, {num_sequences} sequences, "
+                    f"{num_frames} frames."
                 )
         return statistics
