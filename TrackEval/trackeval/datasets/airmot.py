@@ -28,7 +28,9 @@ class AirMOT(_BaseDataset):
         code_path = utils.get_code_path()
         return {
             "GT_FOLDER": os.path.join(code_path, "data/gt/airmot/val"),
-            "TRACKERS_FOLDER": os.path.join(code_path, "data/trackers/airmot"),
+            "TRACKERS_FOLDER": os.path.join(
+                code_path, "data/trackers/airmot"
+            ),
             "OUTPUT_FOLDER": None,
             "TRACKERS_TO_EVAL": None,
             "CLASSES_TO_EVAL": [
@@ -97,7 +99,9 @@ class AirMOT(_BaseDataset):
                 tracker: (tracker if tracker else "FDTA")
                 for tracker in self.tracker_list
             }
-        elif len(self.config["TRACKER_DISPLAY_NAMES"]) == len(self.tracker_list):
+        elif len(self.config["TRACKER_DISPLAY_NAMES"]) == len(
+            self.tracker_list
+        ):
             self.tracker_to_disp = dict(
                 zip(self.tracker_list, self.config["TRACKER_DISPLAY_NAMES"])
             )
@@ -121,12 +125,18 @@ class AirMOT(_BaseDataset):
         seqmap = self.config.get("SEQMAP_FILE")
         if seqmap and str(seqmap).lower() != "none":
             if not os.path.isfile(seqmap):
-                raise TrackEvalException(f"Sequence map does not exist: {seqmap}")
+                raise TrackEvalException(
+                    f"Sequence map does not exist: {seqmap}"
+                )
             names = []
             with open(seqmap, "r", encoding="utf-8") as file:
                 for line_index, line in enumerate(file):
                     name = line.strip().split(",")[0]
-                    if not name or (line_index == 0 and name.lower() in {"name", "seqname"}):
+                    is_header = (
+                        line_index == 0
+                        and name.lower() in {"name", "seqname"}
+                    )
+                    if not name or is_header:
                         continue
                     names.append(name)
             return names
@@ -138,15 +148,35 @@ class AirMOT(_BaseDataset):
         )
 
     def _infer_sequence_length(self, seq):
-        gt_file = os.path.join(self.gt_fol, seq, "gt", "gt.txt")
-        max_frame = 0
-        with open(gt_file, "r", encoding="utf-8") as file:
+        sequence_dir = Path(self.gt_fol) / seq
+        image_max_frame = 0
+        image_dir = sequence_dir / "img1"
+        if image_dir.is_dir():
+            for image_path in image_dir.iterdir():
+                if not image_path.is_file():
+                    continue
+                try:
+                    image_max_frame = max(
+                        image_max_frame, int(image_path.stem)
+                    )
+                except ValueError:
+                    continue
+
+        gt_file = sequence_dir / "gt" / "gt.txt"
+        gt_max_frame = 0
+        with gt_file.open("r", encoding="utf-8") as file:
             for line in file:
                 fields = self._split_fields(line)
                 if fields:
-                    max_frame = max(max_frame, int(float(fields[0])))
+                    gt_max_frame = max(
+                        gt_max_frame, int(float(fields[0]))
+                    )
+
+        max_frame = max(image_max_frame, gt_max_frame)
         if max_frame <= 0:
-            raise TrackEvalException(f"No valid frames found in {gt_file}")
+            raise TrackEvalException(
+                f"No valid frames found in sequence directory {sequence_dir}"
+            )
         return max_frame
 
     def _get_tracker_list(self):
@@ -162,7 +192,8 @@ class AirMOT(_BaseDataset):
             return [""]
 
         return sorted(
-            name for name in os.listdir(self.tracker_fol)
+            name
+            for name in os.listdir(self.tracker_fol)
             if os.path.isdir(os.path.join(self.tracker_fol, name))
         )
 
@@ -176,7 +207,9 @@ class AirMOT(_BaseDataset):
 
     @staticmethod
     def _split_fields(line):
-        return [field for field in re.split(r"[,\s]+", line.strip()) if field]
+        return [
+            field for field in re.split(r"[,\s]+", line.strip()) if field
+        ]
 
     def _load_raw_file(self, tracker, seq, is_gt):
         if is_gt:
@@ -197,7 +230,8 @@ class AirMOT(_BaseDataset):
                 fields = self._split_fields(line)
                 if len(fields) < 8:
                     raise TrackEvalException(
-                        f"Invalid AirMOT row at {file_path}:{line_number}: {line.strip()}"
+                        f"Invalid AirMOT row at {file_path}:"
+                        f"{line_number}: {line.strip()}"
                     )
 
                 frame = int(float(fields[0]))
@@ -208,11 +242,13 @@ class AirMOT(_BaseDataset):
 
                 if frame < 1 or frame > num_timesteps:
                     raise TrackEvalException(
-                        f"Frame {frame} in {file_path} is outside [1, {num_timesteps}]"
+                        f"Frame {frame} in {file_path} is outside "
+                        f"[1, {num_timesteps}]"
                     )
                 if class_id not in self.class_name_to_class_id.values():
                     raise TrackEvalException(
-                        f"Unknown AirMOT class ID {class_id} in {file_path}:{line_number}"
+                        f"Unknown AirMOT class ID {class_id} in "
+                        f"{file_path}:{line_number}"
                     )
                 if obj_id < 0 or width <= 0 or height <= 0:
                     continue
@@ -235,6 +271,7 @@ class AirMOT(_BaseDataset):
 
         if is_gt:
             return {
+                "seq": seq,
                 "gt_ids": ids,
                 "gt_classes": classes,
                 "gt_dets": dets,
@@ -242,6 +279,7 @@ class AirMOT(_BaseDataset):
             }
 
         return {
+            "seq": seq,
             "tracker_ids": ids,
             "tracker_classes": classes,
             "tracker_dets": dets,
@@ -265,6 +303,7 @@ class AirMOT(_BaseDataset):
                 "similarity_scores",
             ]
         }
+        data["seq"] = raw_data["seq"]
 
         unique_gt_ids = set()
         unique_tracker_ids = set()
@@ -275,29 +314,53 @@ class AirMOT(_BaseDataset):
             gt_mask = raw_data["gt_classes"][timestep] == cls_id
             tracker_mask = raw_data["tracker_classes"][timestep] == cls_id
 
-            data["gt_ids"][timestep] = raw_data["gt_ids"][timestep][gt_mask]
-            data["gt_dets"][timestep] = raw_data["gt_dets"][timestep][gt_mask]
-            data["tracker_ids"][timestep] = raw_data["tracker_ids"][timestep][tracker_mask]
-            data["tracker_dets"][timestep] = raw_data["tracker_dets"][timestep][tracker_mask]
-            data["tracker_confidences"][timestep] = raw_data["tracker_confidences"][timestep][tracker_mask]
-            data["similarity_scores"][timestep] = raw_data["similarity_scores"][timestep][gt_mask, :][:, tracker_mask]
+            data["gt_ids"][timestep] = raw_data["gt_ids"][timestep][
+                gt_mask
+            ]
+            data["gt_dets"][timestep] = raw_data["gt_dets"][timestep][
+                gt_mask
+            ]
+            data["tracker_ids"][timestep] = raw_data["tracker_ids"][
+                timestep
+            ][tracker_mask]
+            data["tracker_dets"][timestep] = raw_data["tracker_dets"][
+                timestep
+            ][tracker_mask]
+            data["tracker_confidences"][timestep] = (
+                raw_data["tracker_confidences"][timestep][tracker_mask]
+            )
+            data["similarity_scores"][timestep] = raw_data[
+                "similarity_scores"
+            ][timestep][gt_mask, :][:, tracker_mask]
 
             unique_gt_ids.update(data["gt_ids"][timestep].tolist())
-            unique_tracker_ids.update(data["tracker_ids"][timestep].tolist())
+            unique_tracker_ids.update(
+                data["tracker_ids"][timestep].tolist()
+            )
             num_gt_dets += len(data["gt_ids"][timestep])
             num_tracker_dets += len(data["tracker_ids"][timestep])
 
-        gt_id_map = {obj_id: index for index, obj_id in enumerate(sorted(unique_gt_ids))}
+        gt_id_map = {
+            obj_id: index
+            for index, obj_id in enumerate(sorted(unique_gt_ids))
+        }
         tracker_id_map = {
-            obj_id: index for index, obj_id in enumerate(sorted(unique_tracker_ids))
+            obj_id: index
+            for index, obj_id in enumerate(sorted(unique_tracker_ids))
         }
         for timestep in range(raw_data["num_timesteps"]):
             data["gt_ids"][timestep] = np.asarray(
-                [gt_id_map[obj_id] for obj_id in data["gt_ids"][timestep]],
+                [
+                    gt_id_map[obj_id]
+                    for obj_id in data["gt_ids"][timestep]
+                ],
                 dtype=np.int32,
             )
             data["tracker_ids"][timestep] = np.asarray(
-                [tracker_id_map[obj_id] for obj_id in data["tracker_ids"][timestep]],
+                [
+                    tracker_id_map[obj_id]
+                    for obj_id in data["tracker_ids"][timestep]
+                ],
                 dtype=np.int32,
             )
 
