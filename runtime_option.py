@@ -2,50 +2,50 @@ import argparse
 
 
 def runtime_option():
-    """
-    Build a parser that can set up runtime options, such as choose device, data path, and so on.
-    Every option in this parser should appear in .yaml config file.
+    """Build the shared runtime option parser.
 
-    Returns:
-        A parser.
+    Every option defined here must also appear in the selected YAML config.
+    Boolean values are accepted as strings (``True``/``False``), matching the
+    repository's existing ``update_config`` behavior.
     """
-    parser = argparse.ArgumentParser("Network training and evaluation script.", add_help=True)
+    parser = argparse.ArgumentParser(
+        "Network training and evaluation script.", add_help=True
+    )
 
     # Config file.
     parser.add_argument("--config-path", type=str, default="./configs/dancetrack.yaml")
     parser.add_argument("--super-config-path", type=str)
 
-    # About system.
-    # parser.add_argument("--device", type=str, help="Device.")
+    # System.
     parser.add_argument("--num-workers", type=int, help="Number of workers.")
     parser.add_argument("--prefetch-factor", type=int)
     parser.add_argument("--seed", type=int)
 
-    # About data.
+    # Data.
     parser.add_argument("--data-root", type=str, help="Data root path.")
     parser.add_argument("--dataset-weights", nargs="*", type=int)
 
-    # About evaluation.
+    # Evaluation.
     parser.add_argument("--eval-model", type=str, help="Eval model path.")
 
-    # About outputs.
+    # Outputs.
     parser.add_argument("--outputs-dir", type=str, help="Outputs dir.")
     parser.add_argument("--exp-name", type=str, help="Exp name.")
 
-    # About training settings:
+    # Training settings.
     parser.add_argument("--resume-model", type=str, help="Resume training model path.")
     parser.add_argument("--resume-optimizer", type=str)
     parser.add_argument("--resume-scheduler", type=str)
     parser.add_argument("--detr-pretrain", type=str)
     parser.add_argument("--only-detr", type=str)
 
-    # About sampling:
+    # Sampling.
     parser.add_argument("--sample-steps", type=int, nargs="+")
     parser.add_argument("--sample-lengths", type=int, nargs="+")
     parser.add_argument("--sample-intervals", type=int, nargs="+")
     parser.add_argument("--length-per-iteration", type=int)
 
-    # About augmentation:
+    # Augmentation.
     parser.add_argument("--aug-max-size", type=int)
     parser.add_argument("--aug-max-shift-ratio", type=float)
     parser.add_argument("--aug-resize-scales", nargs="+", type=int)
@@ -65,13 +65,13 @@ def runtime_option():
     parser.add_argument("--use-shared-aux-head", type=str)
     parser.add_argument("--use-focal-loss", type=str)
 
-    # Model settings:
+    # Model settings.
     parser.add_argument("--ffn-dim-ratio", type=int)
     parser.add_argument("--rel-pe-length", type=int)
     parser.add_argument("--id-dim", type=int)
     parser.add_argument("--num-id-decoder-layers", type=int)
 
-    # About inference.
+    # Inference.
     parser.add_argument("--inference-model", type=str, help="Inference model path.")
     parser.add_argument("--inference-mode", type=str)
     parser.add_argument("--inference-dataset", type=str)
@@ -80,13 +80,15 @@ def runtime_option():
     parser.add_argument("--inference-max-longer", type=int)
     parser.add_argument("--inference-dtype", type=str)
     parser.add_argument("--assignment-protocol", type=str)
+    parser.add_argument("--class-aware-association", type=str)
+    parser.add_argument("--airmot-filter-gt-by-flag", type=str)
     parser.add_argument("--miss-tolerance", type=int)
     parser.add_argument("--det-thresh", type=float)
     parser.add_argument("--newborn-thresh", type=float)
     parser.add_argument("--id-thresh", type=float)
     parser.add_argument("--area-thresh", type=int)
 
-    # Hyperparams.
+    # Hyperparameters.
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--accumulate-steps", type=int)
@@ -101,10 +103,9 @@ def runtime_option():
     parser.add_argument("--max-clip-norm", type=float)
     parser.add_argument("--use-accelerate-clip-norm", type=str)
 
-    # Logging:
+    # Logging.
     parser.add_argument("--git-version", type=str)
     parser.add_argument("--save-checkpoint-per-epoch", type=int)
-
     parser.add_argument("--use-previous-checkpoint", type=str)
 
     return parser.parse_args()

@@ -1,0 +1,46 @@
+name: AirMOT static checks
+
+on:
+  push:
+    branches: [feature/airmot-support]
+  pull_request:
+    paths:
+      - 'data/airmot.py'
+      - 'data/joint_dataset.py'
+      - 'models/airmot_runtime_tracker.py'
+      - 'submit_and_evaluate_airmot.py'
+      - 'TrackEval/**'
+      - 'tools/**airmot**'
+      - 'scripts/**airmot**'
+      - 'configs/airmot.yaml'
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile modified Python sources
+        run: |
+          python -m py_compile \
+            data/airmot.py \
+            data/joint_dataset.py \
+            models/airmot_runtime_tracker.py \
+            submit_and_evaluate_airmot.py \
+            TrackEval/scripts/run_airmot.py \
+            TrackEval/trackeval/datasets/airmot.py \
+            tools/check_airmot_setup.py \
+            tools/convert_airmot_detr_pretrain.py \
+            tools/gen_depthmaps.py \
+            tools/smoke_test_airmot.py
+      - name: Validate shell syntax
+        run: |
+          bash -n scripts/check_airmot_setup.sh
+          bash -n scripts/evaluate_airmot.sh
+          bash -n scripts/generate_airmot_depth.sh
+          bash -n scripts/prepare_airmot_pretrain.sh
+          bash -n scripts/smoke_test_airmot.sh
+          bash -n scripts/submit_airmot.sh
+          bash -n scripts/train_airmot.sh
