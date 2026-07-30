@@ -12,6 +12,9 @@ def build_dataset(config: dict):
         splits=config["DATASET_SPLITS"],
         transforms=build_transforms(config),
         size_divisibility=config.get("SIZE_DIVISIBILITY", 0),
+        airmot_filter_gt_by_flag=config.get(
+            "AIRMOT_FILTER_GT_BY_FLAG", False
+        ),
     )
 
 
