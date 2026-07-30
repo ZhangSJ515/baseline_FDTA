@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -28,8 +27,10 @@ def _split_fields(line: str) -> List[str]:
 
 
 def _natural_key(name: str):
-    return [int(token) if token.isdigit() else token.lower()
-            for token in re.split(r"(\d+)", name)]
+    return [
+        int(token) if token.isdigit() else token.lower()
+        for token in re.split(r"(\d+)", name)
+    ]
 
 
 class AirMot(OneDataset):
@@ -58,6 +59,7 @@ class AirMot(OneDataset):
             sub_dir: str = "AirMot",
             split: str = "train",
             load_annotation: bool = True,
+            filter_gt_by_flag: bool = False,
     ):
         if split not in {"train", "val", "test"}:
             raise ValueError(f"Unsupported AirMOT split: {split}")
@@ -73,10 +75,13 @@ class AirMot(OneDataset):
             split=split,
             load_annotation=load_annotation,
         )
+        self.filter_gt_by_flag = bool(filter_gt_by_flag)
 
         split_dir = Path(self.data_dir) / self.split
         if not split_dir.is_dir():
-            raise FileNotFoundError(f"AirMOT split directory does not exist: {split_dir}")
+            raise FileNotFoundError(
+                f"AirMOT split directory does not exist: {split_dir}"
+            )
 
         self._sequence_image_records: Dict[str, List[Tuple[int, str]]] = {}
         self._frame_id_to_index: Dict[str, Dict[int, int]] = {}
@@ -89,7 +94,8 @@ class AirMot(OneDataset):
     def _get_sequence_names(self) -> List[str]:
         split_dir = Path(self.data_dir) / self.split
         names = [
-            path.name for path in split_dir.iterdir()
+            path.name
+            for path in split_dir.iterdir()
             if path.is_dir() and (path / "img1").is_dir()
         ]
         return sorted(names, key=_natural_key)
@@ -98,7 +104,10 @@ class AirMot(OneDataset):
     def _scan_sequence_images(sequence_dir: Path) -> List[Tuple[int, str]]:
         records: List[Tuple[int, str]] = []
         for image_path in (sequence_dir / "img1").iterdir():
-            if not image_path.is_file() or image_path.suffix.lower() not in _IMAGE_EXTENSIONS:
+            if (
+                not image_path.is_file()
+                or image_path.suffix.lower() not in _IMAGE_EXTENSIONS
+            ):
                 continue
             try:
                 frame_id = int(image_path.stem)
@@ -114,11 +123,15 @@ class AirMot(OneDataset):
             sequence_dir = Path(self.data_dir) / self.split / sequence_name
             image_records = self._scan_sequence_images(sequence_dir)
             if not image_records:
-                raise RuntimeError(f"No numeric frame images found in {sequence_dir / 'img1'}")
+                raise RuntimeError(
+                    f"No numeric frame images found in {sequence_dir / 'img1'}"
+                )
 
             frame_ids = [frame_id for frame_id, _ in image_records]
             if len(frame_ids) != len(set(frame_ids)):
-                raise ValueError(f"Duplicate frame IDs found in sequence {sequence_name}")
+                raise ValueError(
+                    f"Duplicate frame IDs found in sequence {sequence_name}"
+                )
 
             with Image.open(image_records[0][1]) as image:
                 width, height = image.size
@@ -137,7 +150,8 @@ class AirMot(OneDataset):
             }
         if not sequence_infos:
             raise RuntimeError(
-                f"No valid AirMOT sequences found under {Path(self.data_dir) / self.split}"
+                f"No valid AirMOT sequences found under "
+                f"{Path(self.data_dir) / self.split}"
             )
         return sequence_infos
 
@@ -165,9 +179,17 @@ class AirMot(OneDataset):
         annotations = self._init_annotations(sequence_names)
 
         for sequence_name in sequence_names:
-            gt_path = Path(self.data_dir) / self.split / sequence_name / "gt" / "gt.txt"
+            gt_path = (
+                Path(self.data_dir)
+                / self.split
+                / sequence_name
+                / "gt"
+                / "gt.txt"
+            )
             if not gt_path.is_file():
-                raise FileNotFoundError(f"AirMOT annotation file does not exist: {gt_path}")
+                raise FileNotFoundError(
+                    f"AirMOT annotation file does not exist: {gt_path}"
+                )
 
             frame_to_index = self._frame_id_to_index[sequence_name]
             with gt_path.open("r", encoding="utf-8") as gt_file:
@@ -177,7 +199,8 @@ class AirMot(OneDataset):
                     fields = _split_fields(line)
                     if len(fields) < 8:
                         raise ValueError(
-                            f"Invalid AirMOT annotation at {gt_path}:{line_number}: {line.strip()}"
+                            f"Invalid AirMOT annotation at {gt_path}:"
+                            f"{line_number}: {line.strip()}"
                         )
 
                     frame_id = int(float(fields[0]))
@@ -188,12 +211,16 @@ class AirMot(OneDataset):
 
                     if category not in _AIRMOT_CLASSES:
                         raise ValueError(
-                            f"Unknown AirMOT class ID {category} at {gt_path}:{line_number}"
+                            f"Unknown AirMOT class ID {category} at "
+                            f"{gt_path}:{line_number}"
                         )
                     if frame_id not in frame_to_index:
                         raise ValueError(
-                            f"Annotation frame {frame_id} has no matching image in sequence {sequence_name}"
+                            f"Annotation frame {frame_id} has no matching image "
+                            f"in sequence {sequence_name}"
                         )
+                    if self.filter_gt_by_flag and flag <= 0:
+                        continue
                     if obj_id < 0 or width <= 0 or height <= 0:
                         continue
 
