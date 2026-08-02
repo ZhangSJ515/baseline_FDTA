@@ -15,6 +15,13 @@ def build_dataset(config: dict):
         airmot_filter_gt_by_flag=config.get(
             "AIRMOT_FILTER_GT_BY_FLAG", False
         ),
+        uadetrac_filter_gt_by_mark=config.get(
+            "UADETRAC_FILTER_GT_BY_MARK", True
+        ),
+        uadetrac_min_visibility=config.get(
+            "UADETRAC_MIN_VISIBILITY", 0.0
+        ),
+        uadetrac_gt_format=config.get("UADETRAC_GT_FORMAT", "auto"),
     )
 
 
