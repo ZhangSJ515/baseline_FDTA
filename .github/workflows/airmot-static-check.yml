@@ -47,6 +47,7 @@ jobs:
             tools/check_uadetrac_setup.py \
             tools/convert_airmot_detr_pretrain.py \
             tools/convert_uadetrac_detr_pretrain.py \
+            tools/convert_uadetrac_xml_to_mot.py \
             tools/gen_depthmaps.py \
             tools/smoke_test_airmot.py \
             tools/smoke_test_uadetrac.py
