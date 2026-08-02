@@ -11,6 +11,7 @@ from .bft import BFT
 from .crowdhuman import CrowdHuman
 from .dancetrack import DanceTrack
 from .sportsmot import SportsMOT
+from .uadetrac import UADETRAC
 
 
 dataset_classes = {
@@ -19,8 +20,10 @@ dataset_classes = {
     "CrowdHuman": CrowdHuman,
     "BFT": BFT,
     "AirMot": AirMot,
-    # Alias retained because existing AirMOT copies use both spellings.
     "AirMOT": AirMot,
+    "UA-DETRAC": UADETRAC,
+    "UADETRAC": UADETRAC,
+    "UA_DETRAC": UADETRAC,
 }
 
 
@@ -28,13 +31,7 @@ _DEPTH_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
 
 
 def resolve_depth_path(image_path: str) -> str:
-    """Resolve a depth image corresponding to an RGB frame.
-
-    The standard layout is ``img1/<stem>.<rgb_ext>`` and
-    ``depth/<stem>.png``. The resolver also accepts other common image
-    extensions and therefore works with AirMOT sequences whose frame naming
-    or RGB extension differs from DanceTrack.
-    """
+    """Resolve the depth image corresponding to an RGB frame."""
     image = Path(image_path)
     parts = list(image.parts)
     try:
@@ -47,7 +44,6 @@ def resolve_depth_path(image_path: str) -> str:
     parts[img1_index] = "depth"
     depth_base = Path(*parts).with_suffix("")
     candidates = [depth_base.with_suffix(ext) for ext in _DEPTH_EXTENSIONS]
-    # Prefer the same extension after the canonical PNG candidate.
     same_extension = depth_base.with_suffix(image.suffix.lower())
     if same_extension not in candidates:
         candidates.insert(1, same_extension)
@@ -72,12 +68,6 @@ class JointDataset(Dataset):
             transforms=None,
             **kwargs,
     ):
-        """
-        Args:
-            data_root: The root directory of datasets.
-            datasets: The list of dataset names, e.g., ["DanceTrack", "AirMot"].
-            splits: The list of dataset split names, e.g., ["train", "train"].
-        """
         super().__init__()
         assert len(datasets) == len(splits), (
             "The number of datasets and splits should be the same."
@@ -87,6 +77,13 @@ class JointDataset(Dataset):
         self.airmot_filter_gt_by_flag = bool(
             kwargs.get("airmot_filter_gt_by_flag", False)
         )
+        self.uadetrac_filter_gt_by_mark = bool(
+            kwargs.get("uadetrac_filter_gt_by_mark", True)
+        )
+        self.uadetrac_min_visibility = float(
+            kwargs.get("uadetrac_min_visibility", 0.0)
+        )
+        self.uadetrac_gt_format = kwargs.get("uadetrac_gt_format", "auto")
 
         self.sequence_infos = defaultdict(lambda: defaultdict(dict))
         self.image_paths = defaultdict(lambda: defaultdict(dict))
@@ -100,6 +97,12 @@ class JointDataset(Dataset):
                 dataset_kwargs["filter_gt_by_flag"] = (
                     self.airmot_filter_gt_by_flag
                 )
+            if dataset in {"UA-DETRAC", "UADETRAC", "UA_DETRAC"}:
+                dataset_kwargs.update({
+                    "filter_gt_by_mark": self.uadetrac_filter_gt_by_mark,
+                    "min_visibility": self.uadetrac_min_visibility,
+                    "gt_format": self.uadetrac_gt_format,
+                })
 
             dataset_class = dataset_classes[dataset](
                 data_root=data_root,
@@ -113,8 +116,6 @@ class JointDataset(Dataset):
             self.image_paths[dataset][split] = dataset_class.get_image_paths()
             self.annotations[dataset][split] = dataset_class.get_annotations()
 
-        # Decouple the 'is_legal' attribute from annotations so the sampler can
-        # test complete clips without mutating the actual annotations.
         self.ann_is_legals = self._decouple_is_legal()
         self.sample_begins: list | None = None
 
