@@ -7,7 +7,7 @@ OUTPUTS_DIR="${OUTPUTS_DIR:-./outputs/fdta_uadetrac}"
 CONFIG_PATH="${CONFIG_PATH:-./configs/uadetrac.yaml}"
 DETR_PRETRAIN="${DETR_PRETRAIN:-./pretrains/r50_deformable_detr_coco_uadetrac.pth}"
 
-DATA_ROOT="${DATA_ROOT}" PRETRAIN="${DETR_PRETRAIN}" \
+DATA_ROOT="${DATA_ROOT}" PRETRAIN="${DETR_PRETRAIN}" SPLITS="train" \
   bash scripts/check_uadetrac_setup.sh
 
 accelerate launch --num_processes="${NUM_GPUS}" train.py \
