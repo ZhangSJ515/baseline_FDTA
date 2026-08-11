@@ -24,6 +24,14 @@ def runtime_option():
     # Data.
     parser.add_argument("--data-root", type=str, help="Data root path.")
     parser.add_argument("--dataset-weights", nargs="*", type=int)
+    parser.add_argument("--airmot-filter-gt-by-flag", type=str)
+    parser.add_argument("--uadetrac-filter-gt-by-mark", type=str)
+    parser.add_argument("--uadetrac-min-visibility", type=float)
+    parser.add_argument(
+        "--uadetrac-gt-format",
+        type=str,
+        choices=["auto", "mot", "native8", "simple"],
+    )
 
     # Evaluation.
     parser.add_argument("--eval-model", type=str, help="Eval model path.")
@@ -81,7 +89,6 @@ def runtime_option():
     parser.add_argument("--inference-dtype", type=str)
     parser.add_argument("--assignment-protocol", type=str)
     parser.add_argument("--class-aware-association", type=str)
-    parser.add_argument("--airmot-filter-gt-by-flag", type=str)
     parser.add_argument("--miss-tolerance", type=int)
     parser.add_argument("--det-thresh", type=float)
     parser.add_argument("--newborn-thresh", type=float)

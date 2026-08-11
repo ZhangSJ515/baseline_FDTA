@@ -13,7 +13,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from video_depth_anything.video_depth import VideoDepthAnything
 
 
-DATASETS = ["DanceTrack", "SportsMOT", "BFT", "AirMot", "AirMOT"]
+DATASETS = [
+    "DanceTrack",
+    "SportsMOT",
+    "BFT",
+    "AirMot",
+    "AirMOT",
+    "UA-DETRAC",
+    "UADETRAC",
+    "UA_DETRAC",
+]
 IMAGE_EXTENSIONS = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tif", "*.tiff")
 
 MODEL_CONFIGS = {
@@ -84,6 +93,21 @@ def process_sequence(model, seq_path, input_size, device, grayscale, fps):
     return len(valid_files)
 
 
+def resolve_dataset_dir(data_root, dataset):
+    aliases = {
+        "AirMot": ("AirMot", "AirMOT"),
+        "AirMOT": ("AirMOT", "AirMot"),
+        "UA-DETRAC": ("UA-DETRAC", "UADETRAC", "UA_DETRAC"),
+        "UADETRAC": ("UADETRAC", "UA-DETRAC", "UA_DETRAC"),
+        "UA_DETRAC": ("UA_DETRAC", "UA-DETRAC", "UADETRAC"),
+    }
+    for name in aliases.get(dataset, (dataset,)):
+        candidate = os.path.join(data_root, name)
+        if os.path.isdir(candidate):
+            return candidate
+    return os.path.join(data_root, dataset)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-root", type=str, required=True)
@@ -95,11 +119,7 @@ def main():
     parser.add_argument("--grayscale", action="store_true")
     args = parser.parse_args()
 
-    dataset_dir = os.path.join(args.data_root, args.dataset)
-    if not os.path.isdir(dataset_dir) and args.dataset == "AirMot":
-        alternate = os.path.join(args.data_root, "AirMOT")
-        if os.path.isdir(alternate):
-            dataset_dir = alternate
+    dataset_dir = resolve_dataset_dir(args.data_root, args.dataset)
     split_dir = os.path.join(dataset_dir, args.split)
     if not os.path.isdir(split_dir):
         raise FileNotFoundError(split_dir)
