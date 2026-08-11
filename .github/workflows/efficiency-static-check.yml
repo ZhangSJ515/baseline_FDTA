@@ -1,0 +1,27 @@
+name: FDTA efficiency static checks
+
+on:
+  push:
+    branches:
+      - feature/airmot-uadetrac-support
+  pull_request:
+    paths:
+      - 'tools/analyze_efficiency.py'
+      - 'scripts/analyze_efficiency_airmot.sh'
+      - 'scripts/analyze_efficiency_uadetrac.sh'
+      - '.github/workflows/efficiency-static-check.yml'
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile efficiency benchmark
+        run: python -m py_compile tools/analyze_efficiency.py
+      - name: Validate efficiency shell launchers
+        run: |
+          bash -n scripts/analyze_efficiency_airmot.sh
+          bash -n scripts/analyze_efficiency_uadetrac.sh
